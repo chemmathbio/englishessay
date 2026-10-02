@@ -1,11 +1,198 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Workspace Module</title>
+    <title>Workspace Dashboard</title>
+    <style>
+        body { margin: 0; background: #111a24; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: 'Segoe UI', system-ui, sans-serif; }
+        canvas { background: #0b1118; border: 3px solid #2d3d4f; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        #ui-box { display: flex; width: 800px; justify-content: space-between; color: #fff; font-size: 20px; font-weight: bold; margin-bottom: 12px; letter-spacing: 1px; }
+        .stat { background: #1e293b; padding: 6px 16px; border-radius: 4px; border: 1px solid #334155; }
+        #over-screen { position: absolute; color: white; text-align: center; display: none; background: rgba(11, 17, 24, 0.9); padding: 40px; border-radius: 12px; border: 2px solid #ef4444; box-shadow: 0 0 25px rgba(239,68,68,0.3); }
+        button { background: #3b82f6; color: white; border: none; padding: 12px 28px; font-size: 16px; cursor: pointer; border-radius: 6px; font-weight: bold; text-transform: uppercase; margin-top: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+        button:hover { background: #2563eb; }
+    </style>
 </head>
 <body>
+    <div id="ui-box">
+        <div class="stat" id="attempt-box">ATTEMPT 1</div>
+        <div class="stat" id="score-box">SCORE: 0m</div>
+    </div>
+    
+    <div id="over-screen">
+        <h1 style="color: #ef4444; margin: 0; font-size: 36px;">CRASHED!</h1>
+        <p style="margin: 10px 0; color: #94a3b8;">Press Space, Up Arrow, or Click to restart</p>
+        <button onclick="resetGame()">Try Again</button>
+    </div>
+
+    <canvas id="game" width="800" height="400"></canvas>
+
     <script>
-        window.location.href = "https://zombsroyale.io";
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score-box');
+        const attemptEl = document.getElementById('attempt-box');
+        const overScreen = document.getElementById('over-screen');
+
+        let score = 0, attempts = 1, isDead = false;
+        let gameSpeed = 6;
+        
+        let player = {
+            x: 100, y: 310, w: 40, h: 40,
+            gravity: 0.6, lift: -11.5, velocity: 0,
+            rotation: 0, targetRotation: 0,
+            onGround: false
+        };
+
+        let obstacles = [];
+        let particles = [];
+        let floorY = 350;
+
+        function jump() {
+            if (player.onGround && !isDead) {
+                player.velocity = player.lift;
+                player.onGround = false;
+                player.targetRotation += Math.PI / 2; // Exact 90 degree flip flip on jump
+            }
+        }
+
+        // Setup Controls (Spacebar, Up Arrow, or Clicking Canvas)
+        window.addEventListener('keydown', e => {
+            if (e.code === 'Space' || e.code === 'ArrowUp') {
+                e.preventDefault();
+                if (isDead) resetGame(); else jump();
+            }
+        });
+        canvas.addEventListener('mousedown', () => { if (isDead) resetGame(); else jump(); });
+
+        function spawnObstacle() {
+            if (Math.random() < 0.015 && !isDead) {
+                // Ensure obstacles don't spawn too closely clustered together
+                if (obstacles.length === 0 || (canvas.width - obstacles[obstacles.length-1].x) > 250) {
+                    let type = Math.random() > 0.4 ? 'spike' : 'double-spike';
+                    obstacles.push({
+                        x: canvas.width,
+                        y: floorY,
+                        w: type === 'double-spike' ? 60 : 30,
+                        h: 38,
+                        type: type
+                    });
+                }
+            }
+        }
+
+        function createFloorParticles() {
+            if (player.onGround && !isDead && Math.random() < 0.4) {
+                particles.push({
+                    x: player.x, y: floorY - 2,
+                    vx: -gameSpeed * 0.5, vy: -Math.random() * 2,
+                    size: Math.random() * 4 + 2, alpha: 1
+                });
+            }
+        }
+
+        function update() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw Grid Background lines
+            ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1;
+            let bgOffset = (score * gameSpeed) % 40;
+            for(let i = -bgOffset; i < canvas.width; i += 40) {
+                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, floorY); ctx.stroke();
+            }
+            for(let j = 0; j < floorY; j += 40) {
+                ctx.beginPath(); ctx.moveTo(0, j); ctx.lineTo(canvas.width, j); ctx.stroke();
+            }
+
+            // Draw Ground Floor
+            ctx.fillStyle = '#1e293b'; ctx.fillRect(0, floorY, canvas.width, canvas.height - floorY);
+            ctx.fillStyle = '#06b6d4'; ctx.fillRect(0, floorY, canvas.width, 4); // Glowing track border
+
+            if (!isDead) {
+                score++;
+                scoreEl.innerText = `SCORE: ${Math.floor(score / 5)}m`;
+                
+                // Physics Calculations
+                player.velocity += player.gravity;
+                player.y += player.velocity;
+
+                if (player.y >= floorY - player.h) {
+                    player.y = floorY - player.h;
+                    player.velocity = 0;
+                    player.onGround = true;
+                    // Snap flat onto ground to look identical to original icon movement 
+                    player.rotation = player.targetRotation; 
+                } else {
+                    player.rotation += 0.08; // Continuous smooth flip tracking in air
+                }
+            }
+
+            // Generate Trail Sparks
+            createFloorParticles();
+            for(let i = particles.length - 1; i >= 0; i--) {
+                particles[i].x += particles[i].vx;
+                particles[i].y += particles[i].vy;
+                particles[i].alpha -= 0.04;
+                ctx.fillStyle = `rgba(6, 182, 212, ${particles[i].alpha})`;
+                if(particles[i].alpha > 0) {
+                    ctx.fillRect(particles[i].x, particles[i].y, particles[i].size, particles[i].size);
+                } else { particles.splice(i,1); }
+            }
+
+            // Draw Cube Player Model
+            ctx.save();
+            ctx.translate(player.x + player.w/2, player.y + player.h/2);
+            ctx.rotate(player.rotation);
+            ctx.fillStyle = '#00ff66'; ctx.fillRect(-player.w/2, -player.h/2, player.w, player.h); // Outer green face
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.strokeRect(-player.w/2, -player.h/2, player.w, player.h);
+            ctx.fillStyle = '#fff'; ctx.fillRect(-12, -12, 8, 8); ctx.fillRect(4, -12, 8, 8); // Eyes
+            ctx.fillStyle = '#000'; ctx.fillRect(-10, -10, 4, 4); ctx.fillRect(6, -10, 4, 4); 
+            ctx.fillRect(-10, 4, 20, 4); // Smile
+            ctx.restore();
+
+            // Run Spikes & Collisions
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                if (!isDead) obstacles[i].x -= gameSpeed;
+
+                // Render Classic Triangular Sharp Spikes
+                ctx.fillStyle = '#f43f5e'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+                ctx.beginPath();
+                if(obstacles[i].type === 'spike') {
+                    ctx.moveTo(obstacles[i].x, obstacles[i].y);
+                    ctx.lineTo(obstacles[i].x + obstacles[i].w/2, obstacles[i].y - obstacles[i].h);
+                    ctx.lineTo(obstacles[i].x + obstacles[i].w, obstacles[i].y);
+                } else { // Handle Double Spike Hazard structures
+                    ctx.moveTo(obstacles[i].x, obstacles[i].y);
+                    ctx.lineTo(obstacles[i].x + 15, obstacles[i].y - obstacles[i].h);
+                    ctx.lineTo(obstacles[i].x + 30, obstacles[i].y);
+                    ctx.lineTo(obstacles[i].x + 45, obstacles[i].y - obstacles[i].h);
+                    ctx.lineTo(obstacles[i].x + 60, obstacles[i].y);
+                }
+                ctx.closePath(); ctx.fill(); ctx.stroke();
+
+                // Hitbox calculations (Slightly narrower margin to make jumps responsive)
+                if (player.x + player.w - 6 > obstacles[i].x &&
+                    player.x + 6 < obstacles[i].x + obstacles[i].w &&
+                    player.y + player.h - 4 > obstacles[i].y - obstacles[i].h) {
+                    isDead = true;
+                    overScreen.style.display = 'block';
+                }
+
+                if (obstacles[i].x < -100) obstacles.splice(i, 1);
+            }
+
+            spawnObstacle();
+            requestAnimationFrame(update);
+        }
+
+        function resetGame() {
+            obstacles = []; particles = [];
+            score = 0; player.y = floorY - player.h; player.velocity = 0;
+            player.rotation = 0; player.targetRotation = 0; player.onGround = true;
+            if (isDead) { attempts++; attemptEl.innerText = `ATTEMPT ${attempts}`; }
+            isDead = false; overScreen.style.display = 'none';
+        }
+
+        update();
     </script>
 </body>
 </html>
