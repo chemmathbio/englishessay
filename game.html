@@ -1,33 +1,95 @@
 <!DOCTYPE html>
-<html lang="en-us">
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <title>Activity Workspace Module</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Dodge</title>
     <style>
-        html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #000; }
-        .webgl-content { width: 100%; height: 100%; }
-        #gameContainer { width: 100vw; height: 100vh; }
+        body { margin: 0; background: #0b0c10; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        canvas { background: #1f2833; border: 4px solid #66fcf1; box-shadow: 0 0 20px #66fcf1; cursor: none; }
+        h1 { margin: 0 0 10px 0; color: #66fcf1; text-shadow: 0 0 10px #66fcf1; font-size: 24px; }
     </style>
-    <!-- Loads the required underlying game formatting and stylesheet engines -->
-    <link rel="stylesheet" href="https://jsdelivr.net">
-    <script src="https://jsdelivr.net"></script>
-    <script src="https://jsdelivr.net"></script>
-    <script>
-        // Instantiates the full 3D rolling physics system
-        var gameInstance = UnityLoader.instantiate("gameContainer", "https://jsdelivr.net", {
-            onProgress: UnityProgress,
-            Module: {
-                onRuntimeInitialized: function() {
-                    UnityProgress(gameInstance, "complete");
-                }
-            }
-        });
-    </script>
 </head>
 <body>
-    <div class="webgl-content">
-        <!-- Renders the full screen canvas element locally -->
-        <div id="gameContainer"></div>
-    </div>
+    <h1>SCORE: <span id="scoreText">0</span> | BEST: <span id="highText">0</span></h1>
+    <canvas id="canvas" width="400" height="500"></canvas>
+    <p style="color: #45f3ff; font-size: 12px; margin-top: 10px;">Move mouse/finger to move your blue ship. Avoid red, collect green!</p>
+
+    <script>
+        const canvas = document.getElementById("canvas"), ctx = canvas.getContext("2d");
+        const scoreText = document.getElementById("scoreText"), highText = document.getElementById("highText");
+        
+        let score = 0, highScore = localStorage.getItem("nd_high") || 0, gameOver = false, speedMult = 1;
+        highText.innerText = highScore;
+
+        let player = { x: 200, y: 430, r: 10 }, gems = [], enemies = [];
+
+        // Track movement (Supports both Mouse and Touch screens)
+        const updatePos = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            player.x = Math.max(player.r, Math.min(canvas.width - player.r, clientX - rect.left));
+        };
+        window.addEventListener("mousemove", updatePos);
+        window.addEventListener("touchmove", updatePos, { passive: true });
+
+        function spawn() {
+            if (gameOver) return;
+            if (Math.random() < 0.05 * speedMult) enemies.push({ x: Math.random() * canvas.width, y: -10, r: Math.random() * 8 + 6, s: Math.random() * 3 + 2 });
+            if (Math.random() < 0.01) gems.push({ x: Math.random() * (canvas.width - 20) + 10, y: -10, r: 8 });
+        }
+
+        function reset() {
+            score = 0; speedMult = 1; enemies = []; gems = []; gameOver = false; scoreText.innerText = 0; loop();
+        }
+        canvas.addEventListener("click", () => { if (gameOver) reset(); });
+
+        function loop() {
+            if (gameOver) {
+                ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#ff4757"; ctx.font = "24px sans-serif"; ctx.textAlign = "center";
+                ctx.fillText("GAME OVER", 200, 230);
+                ctx.fillStyle = "#fff"; ctx.font = "16px sans-serif";
+                ctx.fillText("Click Canvas to Try Again", 200, 270);
+                return;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            speedMult += 0.0005; // Game gets progressively faster
+            spawn();
+
+            // Draw Player
+            ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2); ctx.fillStyle = "#66fcf1"; ctx.fill();
+
+            // Handle Enemies (Red Blasts)
+            enemies.forEach((en, i) => {
+                en.y += en.s * speedMult;
+                ctx.beginPath(); ctx.arc(en.x, en.y, en.r, 0, Math.PI * 2); ctx.fillStyle = "#ff4757"; ctx.fill();
+                
+                // Collision checks
+                let dist = Math.hypot(player.x - en.x, player.y - en.y);
+                if (dist < player.r + en.r) {
+                    gameOver = true;
+                    if (score > highScore) { highScore = score; localStorage.setItem("nd_high", score); highText.innerText = score; }
+                }
+                if (en.y > canvas.height + 20) enemies.splice(i, 1);
+            });
+
+            // Handle Gems (Green Loot)
+            gems.forEach((gm, i) => {
+                gm.y += 2 * speedMult;
+                ctx.beginPath(); ctx.arc(gm.x, gm.y, gm.r, 0, Math.PI * 2); ctx.fillStyle = "#2ed573"; ctx.fill();
+
+                let dist = Math.hypot(player.x - gm.x, player.y - gm.y);
+                if (dist < player.r + gm.r) {
+                    score += 10; scoreText.innerText = score; gems.splice(i, 1);
+                }
+                if (gm.y > canvas.height + 20) gems.splice(i, 1);
+            });
+
+            requestAnimationFrame(loop);
+        }
+        loop();
+    </script>
 </body>
 </html>
