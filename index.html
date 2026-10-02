@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Student Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding-top: 100px; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        button { background-color: #007bff; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 4px; cursor: pointer; transition: 0.2s; }
+        button:hover { background-color: #0056b3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Workspace Module Launcher</h2>
+        <p>Click the button below to load your assigned reading and review materials into a clean browser utility tab.</p>
+        <button onclick="launchResource()">Launch Module</button>
+    </div>
+
+    <script>
+        function launchResource() {
+            // Opens a completely blank browser tab
+            var win = window.open('about:blank', '_blank');
+            if (!win) {
+                alert("Please allow pop-ups for this site to view your assignment.");
+                return;
+            }
+
+            // Creates an iframe that takes up the entire blank tab screen
+            var iframe = win.document.createElement('iframe');
+            iframe.style.width = "100vw";
+            iframe.style.height = "100vh";
+            iframe.style.border = "none";
+            iframe.style.position = "fixed";
+            iframe.style.top = "0";
+            iframe.style.left = "0";
+
+            // Points the iframe directly to your self-hosted game file
+            iframe.src = window.location.href.replace(/\/$/, "") + "/game.html"; 
+
+            // Injects the game into the invisible tab
+            win.document.body.appendChild(iframe);
+            win.document.body.style.margin = "0";
+        }
+    </script>
+</body>
+</html>
